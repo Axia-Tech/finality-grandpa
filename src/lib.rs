@@ -36,51 +36,53 @@ extern crate std;
 
 pub mod round;
 pub mod vote_graph;
+pub mod voter_set;
 #[cfg(feature = "std")]
 pub mod voter;
-pub mod voter_set;
 
 mod bitfield;
+mod weights;
 #[cfg(feature = "std")]
 mod bridge_state;
-#[cfg(any(test, feature = "fuzz-helpers"))]
-pub mod fuzz_helpers;
 #[cfg(any(test))]
 mod testing;
-mod weights;
+#[cfg(any(test, feature = "fuzz-helpers"))]
+pub mod fuzz_helpers;
 #[cfg(not(feature = "std"))]
 mod std {
-	pub use core::{cmp, hash, iter, mem, num, ops};
+	pub use core::cmp;
+	pub use core::hash;
+	pub use core::iter;
+	pub use core::mem;
+	pub use core::num;
+	pub use core::ops;
 
 	pub mod vec {
 		pub use alloc::vec::Vec;
 	}
 
 	pub mod collections {
-		pub use alloc::collections::{
-			btree_map::{self, BTreeMap},
-			btree_set::{self, BTreeSet},
-		};
+		pub use alloc::collections::btree_map::{self, BTreeMap};
+		pub use alloc::collections::btree_set::{self, BTreeSet};
 	}
 
 	pub mod fmt {
-		pub use core::fmt::{Display, Formatter, Result};
+		pub use core::fmt::{Display, Result, Formatter};
 
 		pub trait Debug {}
 		impl<T> Debug for T {}
 	}
 }
 
-use crate::{std::vec::Vec, voter_set::VoterSet};
+use crate::std::vec::Vec;
+use crate::voter_set::VoterSet;
 #[cfg(feature = "derive-codec")]
-use axia_scale_codec::{Decode, Encode};
+use axia_scale_codec::{Encode, Decode};
 use round::ImportResult;
-#[cfg(feature = "derive-codec")]
-use scale_info::TypeInfo;
 
 /// A prevote for a block and its ancestors.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "derive-codec", derive(Encode, Decode, TypeInfo))]
+#[cfg_attr(feature = "derive-codec", derive(Encode, Decode))]
 pub struct Prevote<H, N> {
 	/// The target block's hash.
 	pub target_hash: H,
@@ -97,7 +99,7 @@ impl<H, N> Prevote<H, N> {
 
 /// A precommit for a block and its ancestors.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "derive-codec", derive(Encode, Decode, TypeInfo))]
+#[cfg_attr(feature = "derive-codec", derive(Encode, Decode))]
 pub struct Precommit<H, N> {
 	/// The target block's hash.
 	pub target_hash: H,
@@ -115,7 +117,7 @@ impl<H, N> Precommit<H, N> {
 /// A primary proposed block, this is a broadcast of the last round's estimate.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
-#[cfg_attr(feature = "derive-codec", derive(Encode, Decode, TypeInfo))]
+#[cfg_attr(feature = "derive-codec", derive(Encode, Decode))]
 pub struct PrimaryPropose<H, N> {
 	/// The target block's hash.
 	pub target_hash: H,
@@ -158,27 +160,24 @@ impl std::error::Error for Error {
 
 /// Arithmetic necessary for a block number.
 pub trait BlockNumberOps:
-	std::fmt::Debug
-	+ std::cmp::Ord
-	+ std::ops::Add<Output = Self>
-	+ std::ops::Sub<Output = Self>
-	+ num::One
-	+ num::Zero
-	+ num::AsPrimitive<usize>
-{
-}
+	std::fmt::Debug +
+	std::cmp::Ord +
+	std::ops::Add<Output=Self> +
+	std::ops::Sub<Output=Self> +
+	num::One +
+	num::Zero +
+	num::AsPrimitive<usize>
+{}
 
-impl<T> BlockNumberOps for T
-where
+impl<T> BlockNumberOps for T where
 	T: std::fmt::Debug,
 	T: std::cmp::Ord,
-	T: std::ops::Add<Output = Self>,
-	T: std::ops::Sub<Output = Self>,
+	T: std::ops::Add<Output=Self>,
+	T: std::ops::Sub<Output=Self>,
 	T: num::One,
 	T: num::Zero,
 	T: num::AsPrimitive<usize>,
-{
-}
+{}
 
 /// Chain context necessary for implementation of the finality gadget.
 pub trait Chain<H: Eq, N: Copy + BlockNumberOps> {
@@ -191,7 +190,7 @@ pub trait Chain<H: Eq, N: Copy + BlockNumberOps> {
 	/// Returns true if `block` is a descendent of or equal to the given `base`.
 	fn is_equal_or_descendent_of(&self, base: H, block: H) -> bool {
 		if base == block {
-			return true
+			return true;
 		}
 
 		// TODO: currently this function always succeeds since the only error
@@ -206,7 +205,7 @@ pub trait Chain<H: Eq, N: Copy + BlockNumberOps> {
 
 /// An equivocation (double-vote) in a given round.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "derive-codec", derive(Encode, Decode, TypeInfo))]
+#[cfg_attr(feature = "derive-codec", derive(Encode, Decode))]
 pub struct Equivocation<Id, V, S> {
 	/// The round number equivocated in.
 	pub round_number: u64,
@@ -221,7 +220,7 @@ pub struct Equivocation<Id, V, S> {
 /// A protocol message or vote.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
-#[cfg_attr(feature = "derive-codec", derive(Encode, Decode, TypeInfo))]
+#[cfg_attr(feature = "derive-codec", derive(Encode, Decode))]
 pub enum Message<H, N> {
 	/// A prevote message.
 	#[cfg_attr(feature = "derive-codec", codec(index = 0))]
@@ -248,7 +247,7 @@ impl<H, N: Copy> Message<H, N> {
 /// A signed message.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
-#[cfg_attr(feature = "derive-codec", derive(Encode, Decode, TypeInfo))]
+#[cfg_attr(feature = "derive-codec", derive(Encode, Decode))]
 pub struct SignedMessage<H, N, S, Id> {
 	/// The internal message which has been signed.
 	pub message: Message<H, N>,
@@ -270,7 +269,7 @@ impl<H, N: Copy, S, Id> SignedMessage<H, N, S, Id> {
 /// A commit message which is an aggregate of precommits.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
-#[cfg_attr(feature = "derive-codec", derive(Encode, Decode, TypeInfo))]
+#[cfg_attr(feature = "derive-codec", derive(Encode, Decode))]
 pub struct Commit<H, N, S, Id> {
 	/// The target block's hash.
 	pub target_hash: H,
@@ -283,7 +282,7 @@ pub struct Commit<H, N, S, Id> {
 /// A signed prevote message.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
-#[cfg_attr(feature = "derive-codec", derive(Encode, Decode, TypeInfo))]
+#[cfg_attr(feature = "derive-codec", derive(Encode, Decode))]
 pub struct SignedPrevote<H, N, S, Id> {
 	/// The prevote message which has been signed.
 	pub prevote: Prevote<H, N>,
@@ -296,7 +295,7 @@ pub struct SignedPrevote<H, N, S, Id> {
 /// A signed precommit message.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
-#[cfg_attr(feature = "derive-codec", derive(Encode, Decode, TypeInfo))]
+#[cfg_attr(feature = "derive-codec", derive(Encode, Decode))]
 pub struct SignedPrecommit<H, N, S, Id> {
 	/// The precommit message which has been signed.
 	pub precommit: Precommit<H, N>,
@@ -309,7 +308,7 @@ pub struct SignedPrecommit<H, N, S, Id> {
 /// A commit message with compact representation of authentication data.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
-#[cfg_attr(feature = "derive-codec", derive(Encode, Decode, TypeInfo))]
+#[cfg_attr(feature = "derive-codec", derive(Encode, Decode))]
 pub struct CompactCommit<H, N, S, Id> {
 	/// The target block's hash.
 	pub target_hash: H,
@@ -328,7 +327,7 @@ pub struct CompactCommit<H, N, S, Id> {
 /// a descendent of.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
-#[cfg_attr(feature = "derive-codec", derive(Encode, Decode, TypeInfo))]
+#[cfg_attr(feature = "derive-codec", derive(Encode, Decode))]
 pub struct CatchUp<H, N, S, Id> {
 	/// Round number.
 	pub round_number: u64,
@@ -351,12 +350,10 @@ impl<H, N, S, Id> From<CompactCommit<H, N, S, Id>> for Commit<H, N, S, Id> {
 		Commit {
 			target_hash: commit.target_hash,
 			target_number: commit.target_number,
-			precommits: commit
-				.precommits
-				.into_iter()
+			precommits: commit.precommits.into_iter()
 				.zip(commit.auth_data.into_iter())
 				.map(|(precommit, (signature, id))| SignedPrecommit { precommit, signature, id })
-				.collect(),
+				.collect()
 		}
 	}
 }
@@ -367,11 +364,7 @@ impl<H: Clone, N: Clone, S, Id> From<Commit<H, N, S, Id>> for CompactCommit<H, N
 			target_hash: commit.target_hash,
 			target_number: commit.target_number,
 			precommits: commit.precommits.iter().map(|signed| signed.precommit.clone()).collect(),
-			auth_data: commit
-				.precommits
-				.into_iter()
-				.map(|signed| (signed.signature, signed.id))
-				.collect(),
+			auth_data: commit.precommits.into_iter().map(|signed| (signed.signature, signed.id)).collect(),
 		}
 	}
 }
@@ -440,14 +433,14 @@ pub fn validate_commit<H, N, S, I, C: Chain<H, N>>(
 	voters: &VoterSet<I>,
 	chain: &C,
 ) -> Result<CommitValidationResult<H, N>, crate::Error>
-where
+	where
 	H: Clone + Eq + Ord + std::fmt::Debug,
 	N: Copy + BlockNumberOps + std::fmt::Debug,
 	I: Clone + Ord + Eq + std::fmt::Debug,
 	S: Clone + Eq,
 {
-	let mut validation_result =
-		CommitValidationResult { num_precommits: commit.precommits.len(), ..Default::default() };
+	let mut validation_result = CommitValidationResult::default();
+	validation_result.num_precommits = commit.precommits.len();
 
 	// check that all precommits are for blocks higher than the target
 	// commit block, and that they're its descendents
@@ -460,7 +453,7 @@ where
 	});
 
 	if !all_precommits_higher_than_target {
-		return Ok(validation_result)
+		return Ok(validation_result);
 	}
 
 	let mut equivocated = std::collections::BTreeSet::new();
@@ -489,7 +482,7 @@ where
 				if !valid_voter {
 					validation_result.num_invalid_voters += 1;
 				}
-			},
+			}
 		}
 	}
 
@@ -508,16 +501,20 @@ pub fn process_commit_validation_result<H, N>(
 	mut callback: voter::Callback<voter::CommitProcessingOutcome>,
 ) {
 	if validation_result.ghost.is_some() {
-		callback.run(voter::CommitProcessingOutcome::Good(voter::GoodCommit::new()))
+		callback.run(
+			voter::CommitProcessingOutcome::Good(voter::GoodCommit::new())
+		)
 	} else {
-		callback.run(voter::CommitProcessingOutcome::Bad(voter::BadCommit::from(validation_result)))
+		callback.run(
+			voter::CommitProcessingOutcome::Bad(voter::BadCommit::from(validation_result))
+		)
 	}
 }
 
 /// Historical votes seen in a round.
 #[derive(Default, Clone, PartialEq, Eq)]
 #[cfg_attr(any(feature = "std", test), derive(Debug))]
-#[cfg_attr(feature = "derive-codec", derive(Encode, Decode, TypeInfo))]
+#[cfg_attr(feature = "derive-codec", derive(Encode, Decode))]
 pub struct HistoricalVotes<H, N, S, Id> {
 	seen: Vec<SignedMessage<H, N, S, Id>>,
 	prevote_idx: Option<u64>,
@@ -527,16 +524,24 @@ pub struct HistoricalVotes<H, N, S, Id> {
 impl<H, N, S, Id> HistoricalVotes<H, N, S, Id> {
 	/// Create a new HistoricalVotes.
 	pub fn new() -> Self {
-		HistoricalVotes { seen: Vec::new(), prevote_idx: None, precommit_idx: None }
+		HistoricalVotes {
+			seen: Vec::new(),
+			prevote_idx: None,
+			precommit_idx: None,
+		}
 	}
 
 	/// Create a new HistoricalVotes initialized from the parameters.
 	pub fn new_with(
 		seen: Vec<SignedMessage<H, N, S, Id>>,
 		prevote_idx: Option<u64>,
-		precommit_idx: Option<u64>,
+		precommit_idx: Option<u64>
 	) -> Self {
-		HistoricalVotes { seen, prevote_idx, precommit_idx }
+		HistoricalVotes {
+			seen,
+			prevote_idx,
+			precommit_idx,
+		}
 	}
 
 	/// Push a vote into the list. The value of `self` before this call
@@ -579,7 +584,7 @@ mod tests {
 	#[cfg(feature = "derive-codec")]
 	#[test]
 	fn codec_was_derived() {
-		use axia_scale_codec::{Decode, Encode};
+		use axia_scale_codec::{Encode, Decode};
 
 		let signed = crate::SignedMessage {
 			message: crate::Message::Prevote(crate::Prevote {

@@ -15,12 +15,10 @@
 //! The context of a GRANDPA round tracks the set of voters
 //! and equivocations for the purpose of computing vote weights.
 
-use crate::{
-	bitfield::{Bit1, Bitfield},
-	std::ops::AddAssign,
-	voter_set::{VoterInfo, VoterSet},
-	weights::VoteWeight,
-};
+use crate::bitfield::{Bitfield, Bit1};
+use crate::voter_set::{VoterSet, VoterInfo};
+use crate::std::ops::AddAssign;
+use crate::weights::VoteWeight;
 
 use super::Phase;
 
@@ -35,7 +33,10 @@ pub struct Context<T: Ord + Eq> {
 impl<T: Ord + Eq> Context<T> {
 	/// Create a new context for a round with the given set of voters.
 	pub fn new(voters: VoterSet<T>) -> Self {
-		Context { voters, equivocations: Bitfield::new() }
+		Context {
+			voters,
+			equivocations: Bitfield::new(),
+		}
 	}
 
 	/// Get the set of voters.
@@ -69,20 +70,18 @@ impl<T: Ord + Eq> Context<T> {
 				Phase::Prevote => {
 					let bits = n.bits.iter1s_merged_even(&self.equivocations);
 					weight(bits, &self.voters)
-				},
+				}
 				Phase::Precommit => {
 					let bits = n.bits.iter1s_merged_odd(&self.equivocations);
 					weight(bits, &self.voters)
-				},
+				}
 			}
 		}
 	}
 }
 
 /// A single vote that can be incorporated into a `VoteNode`.
-pub struct Vote {
-	bit: Bit1,
-}
+pub struct Vote { bit: Bit1 }
 
 impl Vote {
 	/// Create a new vote cast by voter `v` in phase `p`.
@@ -91,9 +90,9 @@ impl Vote {
 			bit: Bit1 {
 				position: match p {
 					Phase::Prevote => v.position() * 2,
-					Phase::Precommit => v.position() * 2 + 1,
-				},
-			},
+					Phase::Precommit => v.position() * 2 + 1
+				}
+			}
 		}
 	}
 
@@ -101,7 +100,7 @@ impl Vote {
 	/// if it is contained in that set.
 	fn voter<'a, Id>(&'a self, vs: &'a VoterSet<Id>) -> Option<(&'a Id, &'a VoterInfo)>
 	where
-		Id: Eq + Ord,
+		Id: Eq + Ord
 	{
 		vs.nth(self.bit.position / 2)
 	}
@@ -118,7 +117,9 @@ pub struct VoteNode {
 
 impl Default for VoteNode {
 	fn default() -> Self {
-		Self { bits: Bitfield::new() }
+		Self {
+			bits: Bitfield::new(),
+		}
 	}
 }
 
@@ -139,7 +140,7 @@ impl AddAssign<&Vote> for VoteNode {
 fn weight<V, I>(bits: I, voters: &VoterSet<V>) -> VoteWeight
 where
 	V: Eq + Ord,
-	I: Iterator<Item = Bit1>,
+	I: Iterator<Item = Bit1>
 {
 	let mut total = VoteWeight(0);
 
@@ -190,7 +191,7 @@ mod tests {
 			}
 		}
 
-		quickcheck(prop as fn(_, _))
+		quickcheck(prop as fn(_,_))
 	}
 
 	#[test]
@@ -231,6 +232,6 @@ mod tests {
 			assert_eq!(w, expected);
 		}
 
-		quickcheck(prop as fn(_, _, _))
+		quickcheck(prop as fn(_,_,_))
 	}
 }
